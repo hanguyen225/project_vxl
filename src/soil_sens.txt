@@ -1,0 +1,96 @@
+#define BLYNK_TEMPLATE_ID "TMPL6FX9oQfNy"
+#define BLYNK_TEMPLATE_NAME "Esp32 soil sens"
+#define BLYNK_AUTH_TOKEN "WMCS5TZ8XGOgUFj518HxKMc6WCkUS7Fj"
+
+#include<WiFi.h> 
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+#define Soil_Aout 21 //pin21 on esp32 as analog input
+#define relay 17 //relay pin to drive relay
+
+char ssid[] = "TheonLyK";
+char pass[] = "Kien1812@@@";
+char auth[] = BLYNK_AUTH_TOKEN;
+
+SimpleTimer timer;
+
+int humidityThreshold_soil = 50;
+int toggle_auto_watering = 1;
+int toggle_manual_watering = 0;
+
+BLYNK_WRITE(V1) {toggle_auto_watering = param.asInt();}
+BLYNK_WRITE(V2) {
+    toggle_manual_watering = param.asInt();
+    if (1 == toggle_manual_watering){
+    manual_water();
+    }
+}
+BLYNK_WRITE(V3) {humidityThreshold_soil = param.asInt();}
+
+int read_Soil_Aout(){
+    return map(analogRead(Soil_Aout), 4095, 0, 0, 100);    
+}
+
+void update_to_blynk(){
+    //Blynk.virtualWrite(V0, read_Soil_Aout()); compact ver
+    int V_value = read_Soil_Aout();
+    Blynk.virtualWrite(V0, V_value);
+    
+    //debug monitor via seiral
+    Serial.print(V_value);
+    Serial.print("% ");
+    Serial.print(analogRead(Soil_Aout));
+    Serial.print("V");
+}
+
+void auto_water(int moist){
+    if(moist > 100 || moist < 0){
+        Serial.print("sensor error, disable auto_water");
+        return;
+    }
+
+    if (moist < humidityThreshold_soil)
+    digitalWrite(relay, HIGH);
+    delay(10000);
+    digitalWrite(relay, LOW);
+}
+
+void manual_water(){
+    digitalWrite(relay, HIGH);
+    delay(10000);
+    digitalWrite(relay, LOW);
+    return;
+}
+
+void monitor_soil()
+{
+    if(1 == toggle_auto_watering)
+    auto_water(read_Soil_Aout());
+}
+
+
+
+
+void setup(){
+    Serial.begin(115200);
+    pinMode(Soil_Aout, INPUT);
+    WiFi.begin(ssid, pass);
+    while(WiFi.status() != WL_CONNECTED){
+        delay(200);
+        Serial.print("Connecting");
+    }
+    Serial.println("\nConnected successfully");
+    Blynk.begin(auth, ssid, pass);
+    timer.setInterval(2000L, update_to_blynk);
+}
+
+
+void loop(){
+    Blynk.run();
+    timer.run();
+}
+
+
+
+

@@ -13,6 +13,9 @@
 //Relay pin (Water Pump)
 #define RELAY_PIN 26
 
+//ADC pin (33-36)
+#define SoilADCpin 33
+
 Adafruit_AHTX0 aht;
 TFT_eSPI tft = TFT_eSPI();
 
@@ -23,12 +26,14 @@ char auth[] = "qUNfMaqJMIjAw_tzUFLDnG_x6SaEP9EB";
 SimpleTimer timer;
 
 sensors_event_t humidity, temp;
-String ahtTempStr, humidityStr;
+String ahtTempStr, humidityStr, SoilHumidityStr;
 int toggleAutoWatering = 1;
 int toggleManualWatering = 0;
 int relayState = 0; // Relay state
 double humidityThreshold = 60; // Humidity threshold for the pump
-double tempThreshold = 40; // Temperature threshold for the pump
+double tempThreshold = 40; // Temperature threshold for the 
+
+int soilHumidityThreshold = 40; // Soil's humidity threshold for the pump
 
 // Link variable to data from Blynk
 BLYNK_WRITE(V2) { toggleAutoWatering = param.asInt(); } // 1 = ON, 0 = OFF
@@ -36,14 +41,23 @@ BLYNK_WRITE(V3) { toggleManualWatering = param.asInt(); }
 BLYNK_WRITE(V4) { humidityThreshold = param.asDouble(); }
 BLYNK_WRITE(V5) { tempThreshold = param.asDouble(); }
 
+BLYNK_WRITE(V6) { soilHumidityThreshold = param.asInt(); }
+
+int soilHumidity;
+
+
 void getSensorData() {
     // Get temperature and humidity
     aht.getEvent(&humidity, &temp);
+
+    soilHumidity = map(analogRead(SoilADCpin), 4095, 0, 0, 100);
 }
 
 void sendToBlynk() { // Send data to cloud
     Blynk.virtualWrite(V0, temp.temperature);
     Blynk.virtualWrite(V1, humidity.relative_humidity);
+
+    Blynk.virtualWrite(V6, soilHumidity);
 }
 
 void setDisplayContent() {
@@ -61,6 +75,14 @@ void setDisplayContent() {
     dtostrf(roundf(humidity.relative_humidity * 100) / 100.0, 1, 2, buf); //Round to 2 decimal places
     humidityStr = String(buf);
     tft.drawString(humidityStr, 180, 100, 6);
+
+    // Display soil humidity
+    tft.setTextColor(TFT_BLUE, TFT_BLACK);
+    tft.drawString("Soil humidity", , , ); //lam sau idk 
+    dtostrf(roundf(humidity.relative_humidity * 100) / 100.0, 1, 2, buf); //Round to 2 decimal places
+    SoilHumidityStr = String(buf);
+    tft.drawString(SoilHumidityStr, , , );
+
 
     // Display water pump status
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
@@ -85,6 +107,16 @@ void controlWaterPump() {
         return;
     }
 
+    if (soilHumidity < soilHumidityThreshold || temp.temperature > tempThreshold) {
+        digitalWrite(RELAY_PIN, HIGH); // Turn ON relay (pump ON)
+        relayState = 1;
+    } else {
+        digitalWrite(RELAY_PIN, LOW);  // Turn OFF relay (pump OFF)
+        relayState = 0;
+    }
+
+
+    /* code goc
     if (humidity.relative_humidity < humidityThreshold || temp.temperature > tempThreshold) {
         digitalWrite(RELAY_PIN, HIGH); // Turn ON relay (pump ON)
         relayState = 1;
@@ -92,6 +124,7 @@ void controlWaterPump() {
         digitalWrite(RELAY_PIN, LOW);  // Turn OFF relay (pump OFF)
         relayState = 0;
     }
+    */
 }
 
 void setup() {

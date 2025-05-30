@@ -1,0 +1,122 @@
+#define BLYNK_TEMPLATE_ID "TMPL6FX9oQfNy"
+#define BLYNK_TEMPLATE_NAME "Esp32 soil sens"
+#define BLYNK_AUTH_TOKEN "WMCS5TZ8XGOgUFj518HxKMc6WCkUS7Fj"
+
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+#define Soil_Aout 34 // pin21 on esp32 as analog input
+#define relay 17     // relay pin to drive relay
+#define water_time 1000
+
+char ssid[] = "TheonLyK";
+char pass[] = "Kien1812@@@";
+char auth[] = BLYNK_AUTH_TOKEN;
+
+SimpleTimer timer;
+
+int humidityThreshold_soil = 50;
+int toggle_auto_watering = 1;
+int toggle_manual_watering = 0;
+
+// ---- FUNCTION PROTOTYPES ----
+int read_Soil_Aout();
+void update_to_blynk();
+void auto_water(int moist);
+void manual_water();
+void monitor_soil();
+// Toggle auto watering from Blynk (V1)
+BLYNK_WRITE(V1) { toggle_auto_watering = param.asInt(); }
+
+// Manual watering from Blynk (V2)
+BLYNK_WRITE(V2) {
+    toggle_manual_watering = param.asInt();
+    if (toggle_manual_watering == 1) {
+        manual_water();
+        Serial.println("manual watering");
+    }
+}
+
+// Set humidity threshold from Blynk (V3)
+BLYNK_WRITE(V3) { humidityThreshold_soil = param.asInt(); }
+
+// Optional: Dedicated manual water button (V4)
+BLYNK_WRITE(V4) {
+    int btn = param.asInt();
+    if (btn == 1) {
+        manual_water();
+    }
+}
+
+
+// Read soil moisture as percentage
+int read_Soil_Aout();
+int read_Soil_Aout() {
+    return map(analogRead(Soil_Aout), 4095, 0, 0, 100);
+}
+
+// Update Blynk and print to serial
+void update_to_blynk();
+void update_to_blynk() {
+    int V_value = read_Soil_Aout();
+    Blynk.virtualWrite(V0, V_value);
+
+    int raw = analogRead(Soil_Aout);
+    float voltage = raw * (3.3 / 4095.0);
+    Serial.print(V_value);
+    Serial.print("% ");
+    Serial.print(voltage, 2);
+    Serial.println("V");
+}
+
+// Auto water logic
+void auto_water(int moist);
+void auto_water(int moist) {
+    if (moist > 100 || moist < 0) {
+        Serial.print("sensor error, disable auto_water");
+        return;
+    }
+    if (moist < humidityThreshold_soil) {
+        Serial.println("auto watering");
+        digitalWrite(relay, HIGH);
+        delay(water_time);
+        digitalWrite(relay, LOW);
+    }
+}
+
+// Manual water logic
+void manual_water();
+void manual_water() {
+    digitalWrite(relay, HIGH);
+    delay(water_time);
+    digitalWrite(relay, LOW);
+}
+
+// Periodic soil monitoring for auto watering
+void monitor_soil();
+void monitor_soil() {
+    if (toggle_auto_watering == 1)
+        auto_water(read_Soil_Aout());
+}
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(Soil_Aout, INPUT);
+    pinMode(relay, OUTPUT);
+    digitalWrite(relay, LOW); // Ensure relay is off at start
+    WiFi.begin(ssid, pass);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(200);
+        Serial.print("Connecting\n");
+    }
+    Serial.println("\nConnected successfully");
+    Blynk.begin(auth, ssid, pass);
+    timer.setInterval(1000L, update_to_blynk);     // Update Blynk every 2s
+    timer.setInterval(1000L, monitor_soil);       // Check auto water every 10s
+}
+
+void loop() {
+    Blynk.run();
+    timer.run();
+}
