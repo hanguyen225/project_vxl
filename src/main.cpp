@@ -75,7 +75,7 @@ void setDisplayContent() {
     humidityStr = String(buf);
     tft.drawString(humidityStr, 180, 100, 6);
 
-    /*
+    /* display soil data onto tft display (optional)
     // Display soil humidity
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
     tft.drawString("Soil humidity", , , ); //lam sau idk 
