@@ -14,8 +14,8 @@
 #define SoilADCpin 33 //ADC pin (33-36) 
 
 //light sleep
-#define TIME_TO_SLEEP 60 //In seconds
-#define TIME_TO_STAY_AWAKE 5 //In seconds
+#define TIME_TO_SLEEP 30 //In seconds
+#define TIME_TO_STAY_AWAKE 6 //In seconds
 
 
 RTC_DS3231 rtc;
@@ -272,11 +272,11 @@ void loop() {
 
 
 
-    delay(1750); // Small delay to avoid flooding
+    delay(2000); // Small delay to avoid flooding
     }
     // Enter light sleep
     Serial.println("Going to light sleep...");
     delay(100);
-    esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * 1000000ULL); // 60 seconds in microseconds
+    esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * 1000000ULL); // 
     esp_light_sleep_start();
 }
