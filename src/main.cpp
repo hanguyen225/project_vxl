@@ -1,12 +1,14 @@
+/*
 #define BLYNK_TEMPLATE_ID "TMPL6FX9oQfNy"
 #define BLYNK_TEMPLATE_NAME "Esp32 soil sens"
 #define BLYNK_AUTH_TOKEN "WMCS5TZ8XGOgUFj518HxKMc6WCkUS7Fj"
+*/
 
 #include "RTClib.h"
 #include <Adafruit_AHTX0.h>
 #include <TFT_eSPI.h>
 #include <SPI.h>
-#include <BlynkSimpleEsp32.h>
+//#include <BlynkSimpleEsp32.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
 
@@ -32,11 +34,11 @@ RTC_DS3231 rtc;     // Add this line near your global declarations
 #define HUM_COLOR TFT_GREEN
 #define TFT_BACK_LIGHT 25 //deep sleep, for turning off the screen
 
-//Blynk
-char ssid[] = "TheonLyK";
-char pass[] = "Kien1812@@@";
-char auth[] = BLYNK_AUTH_TOKEN;
-SimpleTimer timer;
+//Blynk/Home Assistant
+char ssid[] = "1727";
+char pass[] = "357?M4g2";
+//char auth[] = BLYNK_AUTH_TOKEN;
+//SimpleTimer timer;
 
 sensors_event_t humidity, temp;
 String ahtTempStr, humidityStr, SoilHumidityStr;
@@ -53,12 +55,12 @@ char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursd
 String yearStr, monthStr, dayStr, hourStr, minuteStr, dayOfWeek, dateStr, timeStr;
 
 
-// Link variable to data from Blynk
-BLYNK_WRITE(V2) { toggleAutoWatering = param.asInt(); } // 1 = ON, 0 = OFF
-BLYNK_WRITE(V3) { toggleManualWatering = param.asInt(); }
-BLYNK_WRITE(V4) { humidityThreshold = param.asDouble(); }
-BLYNK_WRITE(V5) { tempThreshold = param.asDouble(); }
-BLYNK_WRITE(V7) { soilHumidityThreshold = param.asDouble(); } // Now V7 is for soilHumidityThreshold
+// // Link variable to data from Blynk
+// BLYNK_WRITE(V2) { toggleAutoWatering = param.asInt(); } // 1 = ON, 0 = OFF
+// BLYNK_WRITE(V3) { toggleManualWatering = param.asInt(); }
+// BLYNK_WRITE(V4) { humidityThreshold = param.asDouble(); }
+// BLYNK_WRITE(V5) { tempThreshold = param.asDouble(); }
+// BLYNK_WRITE(V7) { soilHumidityThreshold = param.asDouble(); } // Now V7 is for soilHumidityThreshold
 
 
 void getSensorData() {
@@ -93,11 +95,11 @@ double get_soil_sensor_data(){
     return soilHumidity;
 }
 
-void sendToBlynk() { // Send data to cloud
-    Blynk.virtualWrite(V0, temp.temperature);
-    Blynk.virtualWrite(V1, humidity.relative_humidity);
-    Blynk.virtualWrite(V6, soilHumidity); // Now send soilHumidity to V6
-}
+// void sendToBlynk() { // Send data to cloud
+//     Blynk.virtualWrite(V0, temp.temperature);
+//     Blynk.virtualWrite(V1, humidity.relative_humidity);
+//     Blynk.virtualWrite(V6, soilHumidity); // Now send soilHumidity to V6
+// }
 
 void setDisplayContent() {
     char buf[8];
@@ -235,7 +237,7 @@ void setup() {
         while (1) delay(10);
     }
     //Set current time (uncomment only if you want to set RTC!)
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
     // Initialize temperature/humidity sensor
     if (!aht.begin()) {
