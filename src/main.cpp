@@ -14,8 +14,8 @@
 #define SoilADCpin 33 //ADC pin (33-36) 
 
 //light sleep
-#define TIME_TO_SLEEP 59 //In seconds
-#define TIME_TO_STAY_AWAKE 1 //In seconds
+#define TIME_TO_SLEEP 50 //In seconds
+#define TIME_TO_STAY_AWAKE 10 //In seconds
 #define TIME_TO_DEEP_SLEEP 100 
 #define DEEP_SLEEP_TIME 20 
 unsigned long deepSleepStart = 0;
@@ -251,14 +251,12 @@ void setup() {
 
     //deepsleep once a day then it would be placed in this
     //deepSleepStart = millis();
-
+/*
     ledcSetup(1, 5000, 8);
     ledcAttachPin(TFT_BACK_LIGHT, 1);
-    ledcWrite(1, 255);
-
+    ledcWrite(1, 25);
+*/
 }
-    int timerligh = 0;
-
 
 void loop() {
     unsigned long start = millis();
@@ -310,6 +308,7 @@ void loop() {
         esp_deep_sleep_start();
     }
 
+    /*
     int currentMinute = minuteStr.toInt();
 
     if(currentMinute % 2 != 1){
@@ -318,7 +317,7 @@ void loop() {
     else{
         ledcWrite(1, 255);
     }
-
+*/
 
 
 }
