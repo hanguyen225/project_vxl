@@ -14,19 +14,23 @@
 #define SoilADCpin 33 //ADC pin (33-36) 
 
 //light sleep
-#define TIME_TO_SLEEP 30 //In seconds
-#define TIME_TO_STAY_AWAKE 6 //In seconds
+#define TIME_TO_SLEEP 59 //In seconds
+#define TIME_TO_STAY_AWAKE 1 //In seconds
+#define TIME_TO_DEEP_SLEEP 100 
+#define DEEP_SLEEP_TIME 20 
+unsigned long deepSleepStart = 0;
 
 
-RTC_DS3231 rtc;
 Adafruit_AHTX0 aht;
 TFT_eSPI tft = TFT_eSPI();
+RTC_DS3231 rtc;     // Add this line near your global declarations
 
 //clock color
 #define BACKGROUND_COLOR TFT_BLACK
 #define DATE_COLOR TFT_WHITE
 #define TEMP_COLOR TFT_ORANGE
 #define HUM_COLOR TFT_GREEN
+#define TFT_BACK_LIGHT 25 //deep sleep, for turning off the screen
 
 //Blynk
 char ssid[] = "TheonLyK";
@@ -76,13 +80,11 @@ void getSensorData() {
     int soilRaw = analogRead(SoilADCpin);
     soilHumidity = map(soilRaw, 4095, 0, 0, 100);
 
-    
     // Serial output for monitoring soil sensor
     Serial.print("Soil sensor raw value: ");
     Serial.print(soilRaw);
     Serial.print(" | Mapped soil humidity: ");
     Serial.println(soilHumidity);
-    
 }
 
 double get_soil_sensor_data(){
@@ -101,7 +103,9 @@ void setDisplayContent() {
     char buf[8];
 
     int offset_x = 20;
-
+    int offset_y = 20;
+    int tempfontsize = 4;
+    
     // Display day of week, date, and time
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
     tft.drawString(dayOfWeek, 10, 10, 4);
@@ -114,20 +118,20 @@ void setDisplayContent() {
     dtostrf(roundf(temp.temperature * 100) / 100.0, 1, 2, buf); // 2 decimal places
     ahtTempStr = String(buf);
     int temp_pos_y = 140;
-    tft.drawString(ahtTempStr, 20 + offset_x, temp_pos_y, 4);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString("o", 85 + offset_x, temp_pos_y-3, 2); // Small "o" as degree symbol
+    tft.drawString(ahtTempStr, 20 + offset_x, temp_pos_y + offset_y, tempfontsize);
     tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-    tft.drawString("C", 95 + offset_x, temp_pos_y, 4); // "C" for Celsius
+    tft.drawString("o", 85 + offset_x, temp_pos_y-3 + offset_y,tempfontsize - 2); // Small "o" as degree symbol
+    tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+    tft.drawString("C", 95 + offset_x, temp_pos_y + offset_y, tempfontsize); // "C" for Celsius
 
     // Display humidity
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
     //tft.drawString("Humidity", 20, 150, 3);
     dtostrf(roundf(humidity.relative_humidity * 100) / 100.0, 1, 2, buf); // 2 decimal places
     humidityStr = String(buf);
-    int humid_pos_y = 170;
-    tft.drawString(humidityStr, 20 + offset_x, humid_pos_y, 4);
-    tft.drawString("%", 95 + offset_x, humid_pos_y, 4); // Percent symbol
+    int humid_pos_y = 140;
+    tft.drawString(humidityStr, 160 + offset_x, humid_pos_y + offset_y, tempfontsize);
+    tft.drawString("%", 95+ 130 + offset_x, humid_pos_y + offset_y, tempfontsize); // Percent symbol
 
     /*
 
@@ -148,18 +152,17 @@ void setDisplayContent() {
     // Draw the number right-aligned
     tft.drawString(SoilHumidityStr, soilNumX, 200, 6);
     tft.drawString("%", 180, 150, 3); // Percent symbol stays at x=70
-*/
-
+    
     // Display soil humidity
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
     //tft.drawString("Soil Humidity", 20, 150, 3);
-
+    
     int soilInt = (int)get_soil_sensor_data();
     SoilHumidityStr = String(soilInt); 
     int soil_humid_pos_y = 140;
     tft.drawString(SoilHumidityStr, 170 + offset_x, soil_humid_pos_y, 4);
     tft.drawString("%", 200 + offset_x, soil_humid_pos_y, 4); // Percent symbol
-
+    
     // Display water pump status
     tft.setTextColor(TFT_GREEN, TFT_BLACK);
     tft.drawString("Water Pump", 20 + offset_x, 200, 2);//kbiet why k dung dc font to hon 2
@@ -168,6 +171,7 @@ void setDisplayContent() {
     } else {
         tft.drawString("OFF", 180 + offset_x, 200, 2);
     }
+    */
 }
 
 void controlWaterPump() {
@@ -219,7 +223,10 @@ void setup() {
     tft.setRotation(1); // Landscape mode
     tft.fillScreen(TFT_BLACK);
 
-     // Initialize RTC
+    pinMode(TFT_BACK_LIGHT, OUTPUT);
+    digitalWrite(TFT_BACK_LIGHT, HIGH);
+
+    // Initialize RTC
     if (!rtc.begin()) {
         Serial.println("Couldn't find RTC");
         tft.setTextSize(2);
@@ -227,9 +234,8 @@ void setup() {
         Serial.flush();
         while (1) delay(10);
     }
-    // Set current time
+    //Set current time (uncomment only if you want to set RTC!)
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-
 
     // Initialize temperature/humidity sensor
     if (!aht.begin()) {
@@ -242,10 +248,22 @@ void setup() {
     // Initialize relay pin
     pinMode(RELAY_PIN, OUTPUT);
     digitalWrite(RELAY_PIN, LOW); // Start with pump OFF
+
+    //deepsleep once a day then it would be placed in this
+    //deepSleepStart = millis();
+
+    ledcSetup(1, 5000, 8);
+    ledcAttachPin(TFT_BACK_LIGHT, 1);
+    ledcWrite(1, 255);
+
 }
+    int timerligh = 0;
+
 
 void loop() {
     unsigned long start = millis();
+    
+    digitalWrite(TFT_BACK_LIGHT, HIGH);
     while (millis() - start < TIME_TO_STAY_AWAKE * 1000) { // Stay awake for some seconds to allow the code to run before sleeping again
 
 
@@ -277,6 +295,30 @@ void loop() {
     // Enter light sleep
     Serial.println("Going to light sleep...");
     delay(100);
+    //digitalWrite(TFT_BACK_LIGHT, LOW);
     esp_sleep_enable_timer_wakeup(TIME_TO_SLEEP * 1000000ULL); // 
     esp_light_sleep_start();
+
+
+    if(millis() - deepSleepStart >= TIME_TO_DEEP_SLEEP * 1000UL){
+        Serial.println("Going to deep sleep for ");
+        Serial.print(DEEP_SLEEP_TIME);
+        Serial.print("seconds");
+        digitalWrite(TFT_BACK_LIGHT, LOW); 
+        delay(100); 
+        esp_sleep_enable_timer_wakeup(DEEP_SLEEP_TIME * 1000000ULL);
+        esp_deep_sleep_start();
+    }
+
+    int currentMinute = minuteStr.toInt();
+
+    if(currentMinute % 2 != 1){
+        ledcWrite(1, 50);
+    }
+    else{
+        ledcWrite(1, 255);
+    }
+
+
+
 }
