@@ -3,6 +3,54 @@
 #include <TFT_eSPI.h>
 #include <SPI.h>
 
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+const char* ssid = "1727";
+const char* password = "357?M4g2";
+
+const char* mqtt_server = "192.168.1.184";
+const int mqtt_port = 1883;
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+void setup_wifi() {
+    delay(10);
+    Serial.println();
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+
+    WiFi.begin(ssid, password);
+
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+}
+
+void reconnect() {
+    // Loop until we're reconnected
+    while (!client.connected()) {
+        Serial.print("Attempting MQTT connection...");
+        // Attempt to connect
+        if (client.connect("ESP32Client")) {
+            Serial.println("connected");
+        } else {
+            Serial.print("failed, rc=");
+            Serial.print(client.state());
+            Serial.println(" try again in 5 seconds");
+            delay(5000);
+        }
+    }
+}
+
+
 Adafruit_AHTX0 aht;
 TFT_eSPI tft = TFT_eSPI();
 RTC_DS3231 rtc;     // Add this line near your global declarations
@@ -48,7 +96,7 @@ void setDisplayContent() {
 
     int offset_x = 20;
     int offset_y = 20;
-    int tempfontsize = 4;
+    int tempfontsize = 6;
     
     // Display day of week, date, and time
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
@@ -62,11 +110,11 @@ void setDisplayContent() {
     dtostrf(roundf(temp.temperature * 100) / 100.0, 1, 2, buf); // 2 decimal places
     ahtTempStr = String(buf);
     int temp_pos_y = 140;
-    tft.drawString(ahtTempStr, 20 + offset_x, temp_pos_y + offset_y, tempfontsize);
+    tft.drawString(ahtTempStr, 20, temp_pos_y + offset_y, tempfontsize);
     tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-    tft.drawString("o", 85 + offset_x, temp_pos_y-3 + offset_y,tempfontsize - 2); // Small "o" as degree symbol
+    tft.drawString("o",10 + 85 + offset_x, temp_pos_y-3 + offset_y,tempfontsize - 2); // Small "o" as degree symbol
     tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-    tft.drawString("C", 95 + offset_x, temp_pos_y + offset_y, tempfontsize); // "C" for Celsius
+    tft.drawString("C",10 + 95 + offset_x, temp_pos_y + offset_y, tempfontsize); // "C" for Celsius
 
     // Display humidity
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
@@ -82,6 +130,8 @@ void setDisplayContent() {
 
 void setup() {
     Serial.begin(115200);
+    setup_wifi();
+    client.setServer(mqtt_server, mqtt_port);
 
     // Initialize TFT
     delay(200);
@@ -98,7 +148,7 @@ void setup() {
         while (1) delay(10);
     }
     //Set current time (uncomment only if you want to set RTC!)
-    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
     // Initialize temperature/humidity sensor
     if (!aht.begin()) {
@@ -111,9 +161,19 @@ void setup() {
 }
 
 void loop() {
+    if (!client.connected()) {
+        reconnect();
+    }
+    client.loop();
     
     getSensorData();
     setDisplayContent();
+
+    String tempStr = String(temp.temperature, 2);
+    String humStr = String(humidity.relative_humidity, 2);
+
+    client.publish("home/esp32/temperature", tempStr.c_str());
+    client.publish("home/esp32/humidity", humStr.c_str());
 
     // Print to serial for debugging
     Serial.println(dayOfWeek + ", " + dateStr + " " + timeStr);
