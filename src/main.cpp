@@ -148,7 +148,7 @@ void setup() {
         while (1) delay(10);
     }
     //Set current time (uncomment only if you want to set RTC!)
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)).unixtime() + 24); // Add 24 seconds offset
 
     // Initialize temperature/humidity sensor
     if (!aht.begin()) {
