@@ -110,11 +110,11 @@ void setDisplayContent() {
     dtostrf(roundf(temp.temperature * 100) / 100.0, 1, 2, buf); // 2 decimal places
     ahtTempStr = String(buf);
     int temp_pos_y = 140;
-    tft.drawString(ahtTempStr, 20, temp_pos_y + offset_y, tempfontsize);
+    tft.drawString(ahtTempStr, 10, temp_pos_y + offset_y, tempfontsize);
     tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-    tft.drawString("o",10 + 85 + offset_x, temp_pos_y-3 + offset_y,tempfontsize - 2); // Small "o" as degree symbol
+    tft.drawString("o",30 + 85 + offset_x, temp_pos_y-3 + offset_y,tempfontsize - 2 -2); // Small "o" as degree symbol
     tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-    tft.drawString("C",10 + 95 + offset_x, temp_pos_y + offset_y, tempfontsize); // "C" for Celsius
+    tft.drawString("C",30 + 95 + offset_x, temp_pos_y + offset_y, tempfontsize -2); // "C" for Celsius
 
     // Display humidity
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
@@ -122,8 +122,8 @@ void setDisplayContent() {
     dtostrf(roundf(humidity.relative_humidity * 100) / 100.0, 1, 2, buf); // 2 decimal places
     humidityStr = String(buf);
     int humid_pos_y = 140;
-    tft.drawString(humidityStr, 160 + offset_x, humid_pos_y + offset_y, tempfontsize);
-    tft.drawString("%", 95+ 130 + offset_x, humid_pos_y + offset_y, tempfontsize); // Percent symbol
+    tft.drawString(humidityStr, 150 + offset_x, humid_pos_y + offset_y, tempfontsize);
+    tft.drawString("%", 95+ 130 + offset_x + 50, humid_pos_y + offset_y, tempfontsize - 2); // Percent symbol
 
 }
 
@@ -148,7 +148,7 @@ void setup() {
         while (1) delay(10);
     }
     //Set current time (uncomment only if you want to set RTC!)
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)).unixtime() + 24); // Add 24 seconds offset
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); // Add 24 seconds offset
 
     // Initialize temperature/humidity sensor
     if (!aht.begin()) {
