@@ -130,8 +130,8 @@ void setDisplayContent() {
 
 void setup() {
     Serial.begin(115200);
-    setup_wifi();
-    client.setServer(mqtt_server, mqtt_port);
+    // setup_wifi();
+    // client.setServer(mqtt_server, mqtt_port);
 
     // Initialize TFT
     delay(200);
@@ -161,10 +161,10 @@ void setup() {
 }
 
 void loop() {
-    if (!client.connected()) {
-        reconnect();
-    }
-    client.loop();
+    // if (!client.connected()) {
+        // reconnect();
+    // }
+    // client.loop();
     
     getSensorData();
     setDisplayContent();
@@ -172,8 +172,8 @@ void loop() {
     String tempStr = String(temp.temperature, 2);
     String humStr = String(humidity.relative_humidity, 2);
 
-    client.publish("home/esp32/temperature", tempStr.c_str());
-    client.publish("home/esp32/humidity", humStr.c_str());
+    // client.publish("home/esp32/temperature", tempStr.c_str());
+    // client.publish("home/esp32/humidity", humStr.c_str());
 
     // Print to serial for debugging
     Serial.println(dayOfWeek + ", " + dateStr + " " + timeStr);
