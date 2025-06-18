@@ -4,6 +4,7 @@
 #include <SPI.h>
 
 #include <WiFi.h>
+#include "time.h"
 #include <PubSubClient.h>
 
 const char* ssid = "1727";
@@ -14,6 +15,10 @@ const int mqtt_port = 1883;
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 7 * 60 * 60; // Set your timezone offset
+const int   daylightOffset_sec = 0;
 
 void setup_wifi() {
     delay(10);
@@ -128,10 +133,28 @@ void setDisplayContent() {
 }
 
 
+void setRTCfromNTP() {
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    struct tm timeinfo;
+    if (getLocalTime(&timeinfo)) {
+        rtc.adjust(DateTime(
+            timeinfo.tm_year + 1900,
+            timeinfo.tm_mon + 1,
+            timeinfo.tm_mday,
+            timeinfo.tm_hour,
+            timeinfo.tm_min,
+            timeinfo.tm_sec
+        ));
+        Serial.println("RTC set from NTP!");
+    } else {
+        Serial.println("Failed to get time from NTP");
+    }
+}
+
 void setup() {
     Serial.begin(115200);
-    // setup_wifi();
-    // client.setServer(mqtt_server, mqtt_port);
+    setup_wifi();
+    client.setServer(mqtt_server, mqtt_port);
 
     // Initialize TFT
     delay(200);
@@ -148,7 +171,7 @@ void setup() {
         while (1) delay(10);
     }
     //Set current time (uncomment only if you want to set RTC!)
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); // Add 24 seconds offset
+    //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
     // Initialize temperature/humidity sensor
     if (!aht.begin()) {
@@ -158,32 +181,66 @@ void setup() {
         while (1) delay(10);
     }
 
+    // Only set RTC from NTP if WiFi is connected
+    if (WiFi.status() == WL_CONNECTED) {
+        setRTCfromNTP();
+    }
+
 }
 
+unsigned long lastReconnectAttempt = 0;
+const unsigned long reconnectInterval = 10000; // Try every 10 seconds
+
+#define TIME_TO_SLEEP 50 //In seconds
+#define TIME_TO_STAY_AWAKE 10 //In seconds
+
 void loop() {
-    // if (!client.connected()) {
-        // reconnect();
-    // }
-    // client.loop();
-    
+    static int lastUpdateMinute = -1;
+    static float tempSum = 0.0;
+    static float humSum = 0.0;
+    static int sampleCount = 0;
+
+    DateTime now = rtc.now();
+    int currentMinute = now.minute();
+    int currentSecond = now.second();
+
+    // Take a reading and accumulate
     getSensorData();
-    setDisplayContent();
+    tempSum += temp.temperature;
+    humSum += humidity.relative_humidity;
+    sampleCount++;
 
-    String tempStr = String(temp.temperature, 2);
-    String humStr = String(humidity.relative_humidity, 2);
+    // Ensure MQTT connection before publishing
+    if (!client.connected()) {
+        reconnect();
+    }
+    client.loop();
+    if (!isnan(temp.temperature) && !isnan(humidity.relative_humidity)) {
+        String tempStr = String(temp.temperature, 2);
+        String humStr = String(humidity.relative_humidity, 2);
+        client.publish("home/esp32/temperature", tempStr.c_str(), true); // retain flag set
+        client.publish("home/esp32/humidity", humStr.c_str(), true);
+        Serial.println("Published current data to MQTT (with retain)");
+    } else {
+        Serial.println("Skipped MQTT publish: invalid sensor data");
+    }
 
-    // client.publish("home/esp32/temperature", tempStr.c_str());
-    // client.publish("home/esp32/humidity", humStr.c_str());
-
-    // Print to serial for debugging
-    Serial.println(dayOfWeek + ", " + dateStr + " " + timeStr);
-    Serial.print("Temperature: ");
-    Serial.print(temp.temperature);
-    Serial.println("°C");
-    Serial.print("Humidity: ");
-    Serial.print(humidity.relative_humidity);
-    Serial.println("% RH");
-    Serial.println();
-    
-    delay(1000); // Small delay to avoid flooding
+    // If the minute has changed, update display with average
+    if (lastUpdateMinute != currentMinute) {
+        float avgTemp = tempSum / sampleCount;
+        float avgHum = humSum / sampleCount;
+        temp.temperature = avgTemp;
+        humidity.relative_humidity = avgHum;
+        setDisplayContent();
+        // Reset for next minute
+        tempSum = 0.0;
+        humSum = 0.0;
+        sampleCount = 0;
+        lastUpdateMinute = currentMinute;
+    }
+    // Sleep for 5 seconds to save power
+    Serial.println("Sleeping for 5 seconds...");
+    delay(100);
+    esp_sleep_enable_timer_wakeup(5 * 1000000ULL);
+    esp_light_sleep_start();
 }
