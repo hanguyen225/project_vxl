@@ -7,6 +7,9 @@
 #include "time.h"
 #include <PubSubClient.h>
 
+// Global WiFi status flag
+bool wifiConnected = false;
+
 const char* ssid = "1727";
 const char* password = "357?M4g2";
 
@@ -27,31 +30,40 @@ void setup_wifi() {
     Serial.println(ssid);
 
     WiFi.begin(ssid, password);
-
-    while (WiFi.status() != WL_CONNECTED) {
+    unsigned long startAttemptTime = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 10000) {
         delay(500);
         Serial.print(".");
     }
-
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("");
+        Serial.println("WiFi connected");
+        Serial.println("IP address: ");
+        Serial.println(WiFi.localIP());
+        wifiConnected = true;
+    } else {
+        Serial.println("");
+        Serial.println("WiFi connect timeout, continuing without WiFi.");
+        wifiConnected = false;
+    }
 }
 
 void reconnect() {
-    // Loop until we're reconnected
-    while (!client.connected()) {
+    if (!wifiConnected) return; // Don't try MQTT if WiFi failed
+    unsigned long startAttemptTime = millis();
+    while (!client.connected() && millis() - startAttemptTime < 10000) {
         Serial.print("Attempting MQTT connection...");
-        // Attempt to connect
         if (client.connect("ESP32Client")) {
             Serial.println("connected");
         } else {
             Serial.print("failed, rc=");
             Serial.print(client.state());
-            Serial.println(" try again in 5 seconds");
-            delay(5000);
+            Serial.println(" try again in 2 seconds");
+            delay(2000);
         }
+    }
+    if (!client.connected()) {
+        Serial.println("MQTT connect timeout, continuing without MQTT.");
     }
 }
 
@@ -211,18 +223,20 @@ void loop() {
     sampleCount++;
 
     // Ensure MQTT connection before publishing
-    if (!client.connected()) {
-        reconnect();
-    }
-    client.loop();
-    if (!isnan(temp.temperature) && !isnan(humidity.relative_humidity)) {
-        String tempStr = String(temp.temperature, 2);
-        String humStr = String(humidity.relative_humidity, 2);
-        client.publish("home/esp32/temperature", tempStr.c_str(), true); // retain flag set
-        client.publish("home/esp32/humidity", humStr.c_str(), true);
-        Serial.println("Published current data to MQTT (with retain)");
-    } else {
-        Serial.println("Skipped MQTT publish: invalid sensor data");
+    if (wifiConnected) {
+        if (!client.connected()) {
+            reconnect();
+        }
+        client.loop();
+        if (!isnan(temp.temperature) && !isnan(humidity.relative_humidity)) {
+            String tempStr = String(temp.temperature, 2);
+            String humStr = String(humidity.relative_humidity, 2);
+            client.publish("home/esp32/temperature", tempStr.c_str(), true); // retain flag set
+            client.publish("home/esp32/humidity", humStr.c_str(), true);
+            Serial.println("Published current data to MQTT (with retain)");
+        } else {
+            Serial.println("Skipped MQTT publish: invalid sensor data");
+        }
     }
 
     // If the minute has changed, update display with average
