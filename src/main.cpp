@@ -1,8 +1,8 @@
 #include "RTClib.h"
 #include <Adafruit_AHTX0.h>
-#include <TFT_eSPI.h>
 #include <SPI.h>
 #include <driver/dac.h>
+#include <LiquidCrystal.h>
 
 #include <WiFi.h>
 #include "time.h"
@@ -20,8 +20,9 @@ const int mqtt_port = 1883;
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = 7 * 60 * 60; // Set your timezone offset
+// Try multiple NTP servers for reliability
+const char* ntpServer = "129.6.15.28"; // Direct IP for time.nist.gov
+const long  gmtOffset_sec = 7 * 60 * 60; // GMT+7
 const int   daylightOffset_sec = 0;
 
 void setup_wifi() {
@@ -70,7 +71,6 @@ void reconnect() {
 
 
 Adafruit_AHTX0 aht;
-TFT_eSPI tft = TFT_eSPI();
 RTC_DS3231 rtc;     // Add this line near your global declarations
 
 //clock color
@@ -82,13 +82,27 @@ RTC_DS3231 rtc;     // Add this line near your global declarations
 #define BRIGHTNESS_DAC_PIN 25 // GPIO25 (DAC1)
 
 
+// Pin mapping: RS, E, D4, D5, D6, D7
+LiquidCrystal lcd(14, 27, 26, 25, 33, 32);
+
 sensors_event_t humidity, temp;
 String ahtTempStr, humidityStr, SoilHumidityStr;
 
 //clock
-char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+char daysOfTheWeek[7][4] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 String yearStr, monthStr, dayStr, hourStr, minuteStr, dayOfWeek, dateStr, timeStr;
 
+// Custom degree symbol for 1602 LCD
+byte degreeChar[8] = {
+  0b00111,
+  0b00101,
+  0b00111,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000,
+  0b00000
+};
 
 void getSensorData() {
     // Get temperature and humidity
@@ -111,46 +125,33 @@ void getSensorData() {
 
 
 void setDisplayContent() {
-    char buf[8];
-
-    int offset_x = 20;
-    int offset_y = 20;
-    int tempfontsize = 6;
-    
-    // Display day of week, date, and time
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.drawString(dayOfWeek, 10, 10, 4);
-    tft.drawString(dateStr, 180, 10, 4);
-    tft.drawString(timeStr, 30, 50, 8);
-
-    // Display temperature
-    tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-    //tft.drawString("Temperature", 10, 130, 3);
-    dtostrf(roundf(temp.temperature * 100) / 100.0, 1, 2, buf); // 2 decimal places
-    ahtTempStr = String(buf);
-    int temp_pos_y = 140;
-    tft.drawString(ahtTempStr, 10, temp_pos_y + offset_y, tempfontsize);
-    tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-    tft.drawString("o",30 + 85 + offset_x, temp_pos_y-3 + offset_y,tempfontsize - 2 -2); // Small "o" as degree symbol
-    tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-    tft.drawString("C",30 + 95 + offset_x, temp_pos_y + offset_y, tempfontsize -2); // "C" for Celsius
-
-    // Display humidity
-    tft.setTextColor(TFT_BLUE, TFT_BLACK);
-    //tft.drawString("Humidity", 20, 150, 3);
-    dtostrf(roundf(humidity.relative_humidity * 100) / 100.0, 1, 2, buf); // 2 decimal places
-    humidityStr = String(buf);
-    int humid_pos_y = 140;
-    tft.drawString(humidityStr, 150 + offset_x, humid_pos_y + offset_y, tempfontsize);
-    tft.drawString("%", 95+ 130 + offset_x + 50, humid_pos_y + offset_y, tempfontsize - 2); // Percent symbol
-
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(dayOfWeek + " ");
+    lcd.print(temp.temperature, 1);
+    lcd.write(byte(0)); // Print degree symbol
+    lcd.print("C ");
+    lcd.print(humidity.relative_humidity, 1);
+    lcd.print("%");
+    lcd.setCursor(0, 1);
+    lcd.print(timeStr + " ");
+    lcd.print(dateStr);
 }
 
 
 void setRTCfromNTP() {
+    Serial.print("Setting RTC from NTP server: ");
+    Serial.println(ntpServer);
     configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     struct tm timeinfo;
-    if (getLocalTime(&timeinfo)) {
+    if (getLocalTime(&timeinfo, 10000)) { // 10s timeout
+        Serial.println("NTP time received:");
+        Serial.print("Year: "); Serial.println(timeinfo.tm_year + 1900);
+        Serial.print("Month: "); Serial.println(timeinfo.tm_mon + 1);
+        Serial.print("Day: "); Serial.println(timeinfo.tm_mday);
+        Serial.print("Hour: "); Serial.println(timeinfo.tm_hour);
+        Serial.print("Minute: "); Serial.println(timeinfo.tm_min);
+        Serial.print("Second: "); Serial.println(timeinfo.tm_sec);
         rtc.adjust(DateTime(
             timeinfo.tm_year + 1900,
             timeinfo.tm_mon + 1,
@@ -176,17 +177,19 @@ void setup() {
     setup_wifi();
     client.setServer(mqtt_server, mqtt_port);
 
-    // Initialize TFT
-    delay(200);
-    tft.init();
-    tft.setRotation(1); // Landscape mode
-    tft.fillScreen(TFT_BLACK);
+    // Initialize 1602 LCD
+    lcd.begin(16, 2); // 16 columns, 2 rows
+    lcd.clear();
+    lcd.print("Booting up...");
+    delay(1000);
+    lcd.clear();
 
     // Initialize RTC
     if (!rtc.begin()) {
         Serial.println("Couldn't find RTC");
-        tft.setTextSize(2);
-        tft.drawString("RTC Error!", 10, 10);
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("RTC Error!");
         Serial.flush();
         while (1) delay(10);
     }
@@ -196,8 +199,9 @@ void setup() {
     // Initialize temperature/humidity sensor
     if (!aht.begin()) {
         Serial.println("Could not find AHT sensor!");
-        tft.setTextSize(2);
-        tft.drawString("AHT Sensor Error!", 10, 40);
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("AHT Error!");
         while (1) delay(10);
     }
 
@@ -209,6 +213,9 @@ void setup() {
     // Setup DAC for brightness control
     setBrightness(59); // 70% brightness at startup
 
+    lcd.begin(16, 2); // 16 columns, 2 rows
+    lcd.print("Booting up...");
+    lcd.createChar(0, degreeChar); // Create custom degree symbol
 }
 
 unsigned long lastReconnectAttempt = 0;
