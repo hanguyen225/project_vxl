@@ -2,6 +2,7 @@
 #include <Adafruit_AHTX0.h>
 #include <TFT_eSPI.h>
 #include <SPI.h>
+#include <driver/dac.h>
 
 #include <WiFi.h>
 #include "time.h"
@@ -78,6 +79,7 @@ RTC_DS3231 rtc;     // Add this line near your global declarations
 #define TEMP_COLOR TFT_ORANGE
 #define HUM_COLOR TFT_GREEN
 #define TFT_BACK_LIGHT 25 //deep sleep, for turning off the screen
+#define BRIGHTNESS_DAC_PIN 25 // GPIO25 (DAC1)
 
 
 sensors_event_t humidity, temp;
@@ -163,6 +165,12 @@ void setRTCfromNTP() {
     }
 }
 
+void setBrightness(uint8_t brightness) {
+    // Map 0-255 to DAC output
+    dac_output_enable(DAC_CHANNEL_1); // GPIO25
+    dac_output_voltage(DAC_CHANNEL_1, brightness); // 0-255
+}
+
 void setup() {
     Serial.begin(115200);
     setup_wifi();
@@ -197,6 +205,9 @@ void setup() {
     if (WiFi.status() == WL_CONNECTED) {
         setRTCfromNTP();
     }
+
+    // Setup DAC for brightness control
+    setBrightness(59); // 70% brightness at startup
 
 }
 
